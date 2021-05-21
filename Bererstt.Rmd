@@ -15,6 +15,8 @@ path="E:\\Arbeitsordner\\Bilanzierungstool\\Data\\Uniqa.pdf"
 Seitendocs=3
 NumberOfTopics=5
 ########
+
+
 Seitenabschneid=length(df)/Seitendocs
 
 df=pdf_text(path)
