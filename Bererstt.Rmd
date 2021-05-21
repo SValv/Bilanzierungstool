@@ -11,10 +11,11 @@ knitr::opts_chunk$set(echo = F,warning = F,message = F,error = F)
 pacman::p_load(tidyverse,ggplot2,topicmodels,stopwords,tidytext,DT,purrr, wordcloud, pdftools)
 
 ### Einstellbare Hyperparameter
-path="E:\\User\\8523_jfb_2020.pdf"
+path="E:\\Arbeitsordner\\Bilanzierungstool\\Data\\Uniqa.pdf"
 Seitendocs=3
 NumberOfTopics=5
 ########
+Seitenabschneid=length(df)/Seitendocs
 
 df=pdf_text(path)
 
@@ -31,8 +32,16 @@ worte=nrow(Hworter)
 Hworter=Hworter %>%
   filter(!word %in% to_remove)
 
-DTM<- Hworter %>% 
-  mutate(tpc=cut(seite,breaks = seq(1,max(seite),Seitendocs),include.lowest=T)) %>%
+Hworter2=Hworter
+Hworter2$tpc=as.character(cut(Hworter2$seite,breaks = seq(1,max(Hworter2$seite),Seitenabschneid),include.lowest=T))
+
+for (i in 1:nrow(Hworter2)){
+  if (is.na(Hworter2$tpc[i])){
+   Hworter2$tpc[i]=Hworter2$seite[i] 
+  }
+}
+
+DTM<- Hworter2 %>% 
   count(word,tpc) %>% 
   cast_dtm(tpc,word, n)
 
