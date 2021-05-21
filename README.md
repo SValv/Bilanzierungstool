@@ -1,5 +1,5 @@
 # Bilanzierungstool
-Ein Tool zur semantischen Analyse von Jahresabschlüssen mithilfe von NLP und ML.
+Ein Tool zur semantischen Analyse von Jahresabschlüssen mithilfe von NLP und ML. Umgesetzt in R.
 
 ## Überblick
 
