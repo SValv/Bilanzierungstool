@@ -1,0 +1,197 @@
+---
+title: "Jahresabschluss mithilfe von NLP"
+author: "Simon Valverde"
+date: "21.5.2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F,warning = F,message = F,error = F)
+
+pacman::p_load(tidyverse,ggplot2,topicmodels,stopwords,tidytext,DT,purrr, wordcloud, pdftools)
+
+### Einstellbare Hyperparameter
+path="E:\\User\\8523_jfb_2020.pdf"
+Seitendocs=3
+NumberOfTopics=5
+########
+
+df=pdf_text(path)
+
+ll=data.frame(text=df,seite=1:length(df))
+
+to_remove <- c(stopwords(language = "de"), "\n", "dass","a","c","s","2","1","0")
+
+Hworter<-
+  ll %>%
+  unnest_tokens(input = text,
+                output = word) 
+worte=nrow(Hworter)
+
+Hworter=Hworter %>%
+  filter(!word %in% to_remove)
+
+DTM<- Hworter %>% 
+  mutate(tpc=cut(seite,breaks = seq(1,max(seite),Seitendocs),include.lowest=T)) %>%
+  count(word,tpc) %>% 
+  cast_dtm(tpc,word, n)
+
+
+word_counts <- Hworter %>% 
+  count(word)
+```
+
+## Deskriptive
+
+Der Jahresabschluss hat `r length(df)` Seiten und `r worte` Wörter, von denen `r nrow(Hworter)` zur Analyse geeignet waren. 
+
+
+folgende Wöter wurden entfernt:\n
+`r to_remove`
+
+## Frequent Word analysis
+
+Hier schauen wir uns häufig verwendete Wörter an
+
+```{r}
+set.seed(6)
+wordcloud(
+  words = word_counts$word, 
+  freq = word_counts$n, 
+  max.words = 60,
+  colors=rainbow(10),
+  scale = c(8,0.5)
+)
+```
+
+
+```{r}
+Hworter2<-Hworter %>%
+  count(word, sort = TRUE) %>%
+  arrange(desc(n))
+
+colnames(Hworter2)<- c("Wort", "Anzahl")
+
+datatable(Hworter2)
+```
+
+### Die Nachbarschaft von Risiko
+
+```{r}
+riskwords=c("risiken","risiko")
+ergwords=c()
+thres=4
+for (i in 1:length(Hworter$word)){
+  wort=Hworter$word[i]
+  if (wort %in% riskwords){
+    for (j in 1:thres){
+      ergwords=c(ergwords,Hworter$word[i-j],Hworter$word[i+j])
+    }
+  }
+}
+```
+
+Hier haben wir uns die `r thres*2` Worte um die Wörter `r riskwords` herum angeschaut:
+
+```{r}
+Riskdf=data.frame(word=ergwords)
+
+word_counts <- Riskdf %>% 
+  count(word)
+
+set.seed(6)
+wordcloud(
+  words = word_counts$word, 
+  freq = word_counts$n, 
+  max.words = 60,
+  colors=rainbow(10),
+  scale = c(8,0.5)
+)
+```
+
+
+```{r}
+Hworter2<-Riskdf %>%
+  count(word, sort = TRUE) %>%
+  arrange(desc(n))
+
+colnames(Hworter2)<- c("Wort", "Anzahl")
+
+datatable(Hworter2)
+```
+
+## Topic Modelling
+
+Hier verwenden wir statistische Modelle (Latent Dirichlet Allocation) um aus großen Textmengen über Ähnlichkeitsmaße "Themen" zu finden.
+
+```{r fig.width=9,fig.height=9}
+lda_out <- LDA(
+  DTM,
+  k = NumberOfTopics,
+  method = "Gibbs",
+  control = list(seed = 42)
+)
+#p=perplexity(lda_out,newdata = Chatdtm)
+#likely=c(likely, p[1])
+
+#assign(paste("Lda",i,"Tops",sep=""),lda_out)
+#}
+
+lda_tpc<- lda_out%>% tidy(matrix="beta")
+
+lda_tpc2<- lda_tpc %>% 
+  group_by(topic) %>% 
+  top_n(20, beta) %>% 
+  ungroup() %>%
+  mutate(term2 = fct_reorder(term, beta))
+
+ggplot(
+  lda_tpc2, 
+  aes(term2, beta, fill = as.factor(topic))
+) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()+theme_bw()+labs(x="","")
+```
+
+## Sentiment analysis
+
+> "[...]bag of words methods usually categorize only 60 % of sentiments accurately"
+>
+> --- „Artificial Intelligence: A Modern Approch“, Peter Norvig
+
+Daher Achtung bei der Auswertung, das hier ist eine "bag of words"-Methode.
+
+
+```{r}
+library(pradadata)
+data("germanlex")
+
+colnames(germanlex)[1]="wort"
+sentimentdf=data.frame(seite=1, word="wort",wort="wort",qualifier="",polarity_strength=1,pos="")
+for (i in 1:length(Hworter$word)){
+  wort=Hworter$word[i]
+  if (wort %in% germanlex$wort){
+    indexgerm=which(germanlex$wort==wort)
+    rowa=cbind(Hworter[i,],germanlex[indexgerm,])
+    sentimentdf=rbind(sentimentdf,rowa)
+  }
+}
+```
+
+für die Sentiment Analyse wurde das Dictionary [germanlex](https://github.com/sebastiansauer/pradadata) verwendet. Es gab `r nrow(sentimentdf)-1` übereinstimmende Wörter. 
+
+```{r}
+sentimentdfpos= sentimentdf %>% filter(qualifier=="POS") 
+sentimentdfneg= sentimentdf %>% filter(qualifier=="NEG") 
+sentimentpospol=mean(sentimentdfpos$polarity_strength)
+sentimentnegpol=mean(sentimentdfneg$polarity_strength)
+```
+
+Im allgemeinen ist die Formulierung der gefundenen Wörter zu `r sentimentpospol` positiv und zu `r sentimentnegpol` negativ behaftet - diese Zahlen beziehen sich auf die durchschnittliche "Stärke" der verwendeten Wörter. Es wurden `r nrow(sentimentdfpos)` positive und `r nrow(sentimentdfneg)` negative Worte gefunden. 
+
+```{r}
+sentimentdf%>% filter(qualifier=="POS" | qualifier=="NEG"|qualifier=="NEU")%>%
+ggplot(aes(x=seite,y=polarity_strength,col=qualifier))+theme_bw()+geom_smooth()+facet_grid(.~qualifier)+labs(y="Stärke",x="Seite")+ scale_color_discrete(name="")
+```
+
