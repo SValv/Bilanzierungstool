@@ -1,0 +1,7 @@
+# Bilanzierungstool
+Ein Tool zur semantischen Analyse von Jahresabschlüssen mithilfe von NLP und ML.
+
+## Überblick
+
+Dieses Tool ist geschrieben um eine semantische Analyse von Jahresabschlüssen schnell Durchführen zu können. Momentan ist das nur in deutscher Sprache möglich, kann aber schnell angepasst wwerden.
+Ein Problem ist dass noch kein dictionary, welches für Bilanzanalyse optimiert ist, gefunden wurde.
